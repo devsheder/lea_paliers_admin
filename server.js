@@ -2,9 +2,9 @@ var http = require('https'),
 	fs = require('fs'),
 	url = require('url'),
 	count = 0,
-	path = "/dev/iot/leo/leaspeaking/"
-	userAdmin = "test",
-	pwdAdmin = "test",
+	path = "/dev/iot/leo/leaspeaking"
+	userAdmin = "",
+	pwdAdmin = "",
 	publicRessources = ["GET /", "GET /index.html", "GET /auth"];
 
 var options = {
@@ -12,6 +12,16 @@ var options = {
   cert: fs.readFileSync('cert.pem')
 };
 
+// Récupération user et mot de passe
+process.argv.forEach(function (val, index) {
+	if (index === 2) {
+		userAdmin = val;
+	} else if  (index === 3) {
+		pwdAdmin = val;
+	}
+});
+
+// Vérification chemin des json
 try {
 	fs.statSync(path).isDirectory();
 } catch (error) {

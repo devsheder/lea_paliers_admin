@@ -490,7 +490,7 @@
 								if (xhr.readyState === 4 && xhr.status === 200) {
 									document.getElementById("tweetsCount").style.display = "block";
 									var jsonResponse = JSON.parse(xhr.response);
-									if (jsonResponse && jsonResponse.count) {
+									if (jsonResponse && jsonResponse.count !== undefined && jsonResponse.count !== null) {
 										document.getElementById("count").value = jsonResponse.count;
 									}
 									setTimeout(function(){ updateTweets() }, timerRequest);
