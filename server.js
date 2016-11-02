@@ -1,9 +1,13 @@
-var http = require('http'),
+var http = require('https'),
 	fs = require('fs'),
 	url = require('url'),
 	count = 0,
 	path = "/dev/iot/leo/leaspeaking";
 
+var options = {
+  key: fs.readFileSync('key.pem'),
+  cert: fs.readFileSync('cert.pem')
+};
 
 function _createResponse(httpCode, contentType, content) {
 	return {
@@ -18,7 +22,7 @@ function _endResponse(res, response) {
 	res.end(response.content);
 }
 
-http.createServer(function(req, res) {
+http.createServer(options, function(req, res) {
 	var httpRequest = req.method + " " + url.parse(req.url).pathname;
 	var sendResponse = true;
 	
