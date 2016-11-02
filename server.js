@@ -1,7 +1,8 @@
 var http = require('http'),
 	fs = require('fs'),
 	url = require('url'),
-	count = 0;
+	count = 0,
+	path = "/dev/iot/leo/leaspeaking";
 
 
 function _createResponse(httpCode, contentType, content) {
@@ -12,8 +13,14 @@ function _createResponse(httpCode, contentType, content) {
 	};
 }
 
+function _endResponse(res, response) {
+	res.writeHead(response.httpCode, {'Content-Type': response.contentType});
+	res.end(response.content);
+}
+
 http.createServer(function(req, res) {
 	var httpRequest = req.method + " " + url.parse(req.url).pathname;
+	var sendResponse = true;
 	
 	switch (httpRequest) {
 		case "GET /":
@@ -32,12 +39,44 @@ http.createServer(function(req, res) {
 			}
 			break;
 		case "POST /gamification":
-			// TODO
-			response = _createResponse(201, "text/html", "OK");
+			sendResponse = false;
+			try {
+				var requestContent = req.content;
+				// Vérification des headers
+				if (req.headers["content-type"] !== "application/json") {
+					_createResponse(400, "text/html", "Le contenu de la requête devrait être du Json");
+					_endResponse(res, response);
+				} else {
+					var body = [];
+					req.on('data', function(chunk) {
+						body.push(chunk);
+					}).on('end', function() {
+						try {
+							body = Buffer.concat(body).toString();
+							// Vérification du contenu
+							JSON.parse(body);
+							fs.writeFileSync('gamification.json', body);
+							response = _createResponse(201, "text/html", "OK");
+							_endResponse(res, response);
+						} catch (error) {
+							console.log(error);
+							response = _createResponse(500, "text/html", "Erreur lors de l'écriture : " + error);
+							_endResponse(res, response);
+						}
+					}).on('error', function(error) {
+						console.log(error);
+						response = _createResponse(500, "text/html", "Erreur lors de l'écriture : " + error);
+						_endResponse(res, response);
+					});
+				}
+			} catch (error) {
+				console.log(error);
+				response = _createResponse(500, "text/html", "Erreur lors de l'écriture : " + error);
+				_endResponse(res, response);
+			}
 			break;
 		case "GET /gamification/motions_sounds":
 			try {
-				
 				var motionsAndSounds = fs.readFileSync('motions_sounds.json');
 				var motionsAndSoundsJson = JSON.parse(motionsAndSounds);
 				response = _createResponse(200, "application/json", "{}", JSON.stringify(motionsAndSoundsJson));
@@ -60,7 +99,8 @@ http.createServer(function(req, res) {
 			break;
 	}
 	
-	res.writeHead(response.httpCode, {'Content-Type': response.contentType});
-	res.end(response.content);
+	if (sendResponse) {
+		_endResponse(res, response);
+	}
 	
 }).listen(9090);

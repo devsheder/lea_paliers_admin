@@ -68,20 +68,33 @@
 		</style>
         <script>
 			var timerRequest = 2000;
-			// TODO appeler service "GET /gamification/motions_sounds"
-			var motionList = ["FIGHT_CLUB", "AMELIE_POULAIN", "TWIN_PEAKS", "AVATAR", "ROCKY"];
-			var soundList = ["sos", "colle", "diable", "affranchis", "gemissement"];
 			
 			/*
 			* Permet d'envoyer une requête Ajax
 			* @param method {String} méthode HTTP
 			* @param url {String} URL du service à appeler
-			* @param responseHandler {Function} Fonction qui traite le résultat de la requête
+			* @param requestHeaders {Array} tableau des headers de la requête de la forme [{name:"requestHeaderName", value:"requestHeaderValue"}]
+			* @param requestContent {String} body de la requête
 			*/
-			function _ajax(method, url, responseHandler) {
+			function _ajax(method, url, responseHandler, requestHeaders, requestContent) {
 				var xhr = new XMLHttpRequest();
-				xhr.open(method, url, true); 
-				xhr.send();
+				xhr.open(method, url, true);
+				
+				// Headers de la requête
+				if (requestHeaders) {
+					requestHeaders.forEach(function(requestHeader) {
+						xhr.setRequestHeader(requestHeader.name, requestHeader.value);
+					});
+				}
+				
+				// Contenu de la requête
+				if (requestContent) {
+					xhr.send(requestContent);
+				} else {
+					xhr.send();
+				}
+				
+				// Handler de résultat
 				xhr.onreadystatechange = function() {
 					responseHandler(xhr);
 				};
@@ -209,6 +222,31 @@
 			}
 			
 			/*
+			* Permet de générer les listes des sons et mouvements
+			* @param jsonGamification {Json} json à parser
+			* @return {Json} les listes de forme {motions:["motion1", "motion2", "..."], sounds:["sound1", "sound2"], "..."}
+			*/
+			function _initMotionsAndSoundsLists(jsonGamification) {
+				var lists = {
+					motions:[],
+					sounds:[]
+				}
+				for (var key in jsonGamification) {
+					var motion = jsonGamification[key].motion;
+					if (motion && lists.motions.indexOf(motion) === -1) {
+						lists.motions.push(motion);
+					}
+					
+					var sound = jsonGamification[key].sound;
+					if (sound && lists.sounds.indexOf(sound) === -1) {
+						lists.sounds.push(sound);
+					}
+				}
+				
+				return lists;
+			}
+			
+			/*
 			* Permet d'afficher la liste des paliers
 			*/
 			function showRanks() {
@@ -223,6 +261,11 @@
 							var oRankInputDivColumnHTML = document.getElementById("rank_column");
 							var oRankSelectMotionDivColumnHTML = document.getElementById("motion_column");
 							var oRankSelectSoundDivColumnHTML = document.getElementById("sound_column");
+							
+							// Init des listes des mouvements et des sons déduits du json reçu
+							var motionsAndSoundsLists = _initMotionsAndSoundsLists(jsonResponse);
+							var motionList = motionsAndSoundsLists.motions;
+							var soundList = motionsAndSoundsLists.sounds;
 							
 							// Parcours des paliers
 							for (var key in jsonResponse) {
@@ -312,6 +355,8 @@
 								// En-tête colonne Son
 								oRankSelectSoundDivColumnHTML.insertBefore(_generateElementHTML("div", null, null, "Son"), oRankSelectSoundDivColumnHTML.firstChild);
 							}
+						} else {
+							alert("Erreur lors du parsing du flux gamification : flux incorrect")
 						}
 					}
 				});
@@ -359,7 +404,15 @@
 						}
 					});
 					if (rankValidNumber === rankTextFields.length) {
-						// TODO appeler service "POST /gamification"
+						// Enregistrement
+						_ajax("POST", "/gamification", function(xhr) {
+							if (xhr.readyState === 4 && xhr.status === 201) {
+								alert("Modifications enregistrées !");
+								showRanks();
+							} else if (xhr.readyState === 2 && xhr.status === 500) {
+								alert("Erreur lors de l'enregistrement des modifications");
+							}
+						}, [{name:"Content-type", value:"application/json"}], JSON.stringify(jsonToPost));
 					}
 					
 				}
