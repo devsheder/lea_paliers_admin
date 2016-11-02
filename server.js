@@ -2,7 +2,7 @@ var http = require('https'),
 	fs = require('fs'),
 	url = require('url'),
 	count = 0,
-	path = "/dev/iot/leo/leaspeaking"
+	path = "/dev/iot/leo/leaspeaking/"
 	userAdmin = "test",
 	pwdAdmin = "test",
 	publicRessources = ["GET /", "GET /index.html", "GET /auth"];
@@ -12,6 +12,20 @@ var options = {
   cert: fs.readFileSync('cert.pem')
 };
 
+try {
+	fs.statSync(path).isDirectory();
+} catch (error) {
+	console.log("Répertoire \"" + path + "\" non trouvé")
+	path = "./";
+}
+
+/*
+* Permet de créer le Json de la réponse
+* @param httpCode {Integer} code HTTP
+* @param contentType {String} header content-type
+* @param content {String/Json} body  de la réposne
+* @return {Json} de la forme { httpCode : httpCode, contentType : contentType, content : content }
+*/
 function _createResponse(httpCode, contentType, content) {
 	return {
 		httpCode : httpCode,
@@ -20,9 +34,29 @@ function _createResponse(httpCode, contentType, content) {
 	};
 }
 
+/*
+* Permet de terminer la requête HTTP
+* @param res {Object} Objet Node réprésetant la réponse HTTP
+* @param response {Json} Voir _createResponse()
+*/
 function _endResponse(res, response) {
 	res.writeHead(response.httpCode, {'Content-Type': response.contentType});
 	res.end(response.content);
+}
+
+/*
+* Permet de lire un fichier
+* @return {Object} le résultat de readFileSync de Node
+*/
+function _internalReadFileSync(fileName) {
+	return fs.readFileSync(path + fileName);
+}
+
+/*
+* Permet d'écrire dans un fichier
+*/
+function _internalWriteFileSync(fileName, content) {
+	fs.writeFileSync(path + fileName, content);
 }
 
 http.createServer(options, function(req, res) {
@@ -34,10 +68,10 @@ http.createServer(options, function(req, res) {
 	if (publicRessources.indexOf(httpRequest) !== -1 || checkAuthent) {
 		switch (httpRequest) {
 			case "GET /":
-				response = _createResponse(200, "text/html", fs.readFileSync('index.html'));
+				response = _createResponse(200, "text/html", _internalReadFileSync('index.html'));
 				break;
 			case "GET /index.html":
-				response = _createResponse(200, "text/html", fs.readFileSync('index.html'));
+				response = _createResponse(200, "text/html", _internalReadFileSync('index.html'));
 				break;
 			case "GET /auth":
 				if (checkAuthent) {
@@ -48,7 +82,7 @@ http.createServer(options, function(req, res) {
 				break;
 			case "GET /gamification":
 				try {
-					var gamification = fs.readFileSync('gamification.json');
+					var gamification = _internalReadFileSync('gamification.json');
 					var gamificationJson = JSON.parse(gamification);
 					response = _createResponse(200, "application/json", JSON.stringify(gamificationJson));
 				} catch (error) {
@@ -72,7 +106,7 @@ http.createServer(options, function(req, res) {
 								body = Buffer.concat(body).toString();
 								// Vérification du contenu
 								JSON.parse(body);
-								fs.writeFileSync('gamification.json', body);
+								_internalWriteFileSync('gamification.json', body);
 								response = _createResponse(201, "text/html", "OK");
 								_endResponse(res, response);
 							} catch (error) {
@@ -94,7 +128,7 @@ http.createServer(options, function(req, res) {
 				break;
 			case "GET /gamification/motions_sounds":
 				try {
-					var motionsAndSounds = fs.readFileSync('motions_sounds.json');
+					var motionsAndSounds = _internalReadFileSync('motions_sounds.json');
 					var motionsAndSoundsJson = JSON.parse(motionsAndSounds);
 					response = _createResponse(200, "application/json", "{}", JSON.stringify(motionsAndSoundsJson));
 				} catch (error) {
@@ -103,7 +137,7 @@ http.createServer(options, function(req, res) {
 				break;
 			case "GET /tweets/count":
 				try {
-					var tweets = fs.readFileSync('tweets.json');
+					var tweets = _internalReadFileSync('tweets.json');
 					count = JSON.parse(tweets).length;
 				} catch (error) {
 					response = _createResponse(200, "application/json", "{\"count\":"+count+"}");
