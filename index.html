@@ -5,12 +5,22 @@
         <meta name="viewport" content="width=device-width, user-scalable=no">
         <title>Léa - Administration des paliers</title>
 		<style>
+			/* Coompteur de tweet*/
+			#tweetsCount {
+				display:none;
+			}
+			
+			/* Formulaire d'authentification*/
+			#auth {
+				width:100%;
+			}
+			
+			/* Tableau des paliers */
 			#ranks {
 				display:flex;
 				flex-direction:row;
+				width:100%;
 			}
-			
-			/* Colonnes */
 			.column {
 				display:flex;
 				flex-direction:column;
@@ -44,6 +54,9 @@
 				flex-direction:row;
 				margin-bottom:5px;
 			}
+			#actions {
+				display:none;
+			}
 			
 			/* Boutons incréments/décréments */
 			#increment_decrement_wrapper {
@@ -61,13 +74,17 @@
 				cursor:pointer;
 			}
 			
+			/* Compteur de tweets */
 			#count {
 				border:0;
 			}
 			
+			/* Formulaire d'authentification */
+			
 		</style>
         <script>
 			var timerRequest = 2000;
+			var user, pwd;
 			
 			/*
 			* Permet d'envoyer une requête Ajax
@@ -75,29 +92,53 @@
 			* @param url {String} URL du service à appeler
 			* @param requestHeaders {Array} tableau des headers de la requête de la forme [{name:"requestHeaderName", value:"requestHeaderValue"}]
 			* @param requestContent {String} body de la requête
+			* @param withAuthent indique s'il faut vérifier l'authentification d'abord
 			*/
-			function _ajax(method, url, responseHandler, requestHeaders, requestContent) {
-				var xhr = new XMLHttpRequest();
-				xhr.open(method, url, true);
+			function _ajax(method, url, responseHandler, requestHeaders, requestContent, withAuthent) {
 				
-				// Headers de la requête
-				if (requestHeaders) {
-					requestHeaders.forEach(function(requestHeader) {
-						xhr.setRequestHeader(requestHeader.name, requestHeader.value);
-					});
+				var _ajaxInternal = function(method, url, responseHandler, requestHeaders, requestContent, withAuthent) {
+					var xhr = new XMLHttpRequest();
+					xhr.open(method, url, true);
+					
+					// Headers de la requête
+					if (requestHeaders) {
+						requestHeaders.forEach(function(requestHeader) {
+							xhr.setRequestHeader(requestHeader.name, requestHeader.value);
+						});
+					}
+					
+					// Ajout des headers sécurité
+					xhr.setRequestHeader("user", user);
+					xhr.setRequestHeader("pwd", pwd);
+					
+					// Contenu de la requête
+					if (requestContent) {
+						xhr.send(requestContent);
+					} else {
+						xhr.send();
+					}
+					
+					// Handler de résultat
+					xhr.onreadystatechange = function() {
+						responseHandler(xhr);
+					};
 				}
 				
-				// Contenu de la requête
-				if (requestContent) {
-					xhr.send(requestContent);
+				if (withAuthent) {
+					// Athentification demandée
+					_ajax("GET", "/auth", function(xhr) {
+						if (xhr.readyState === 4 && xhr.status === 403) {
+							alert("User/mot de passe incorrects");
+							document.getElementById("user").select();
+						} else if (xhr.readyState === 4 && xhr.status === 200) {
+							// Authentification OK
+							_ajaxInternal(method, url, responseHandler, requestHeaders, requestContent, false);
+						}
+					}, null, null, false);
 				} else {
-					xhr.send();
+					// Pas d'authentification demandée
+					_ajaxInternal(method, url, responseHandler, requestHeaders, requestContent, false);
 				}
-				
-				// Handler de résultat
-				xhr.onreadystatechange = function() {
-					responseHandler(xhr);
-				};
 			}
 			
 			/*
@@ -245,7 +286,7 @@
 				
 				return lists;
 			}
-			
+						
 			/*
 			* Permet d'afficher la liste des paliers
 			*/
@@ -354,6 +395,9 @@
 								
 								// En-tête colonne Son
 								oRankSelectSoundDivColumnHTML.insertBefore(_generateElementHTML("div", null, null, "Son"), oRankSelectSoundDivColumnHTML.firstChild);
+								
+								// Affichage bouton
+								document.getElementById("actions").style.display = "block";
 							}
 						} else {
 							alert("Erreur lors du parsing du flux gamification : flux incorrect")
@@ -412,7 +456,7 @@
 							} else if (xhr.readyState === 2 && xhr.status === 500) {
 								alert("Erreur lors de l'enregistrement des modifications");
 							}
-						}, [{name:"Content-type", value:"application/json"}], JSON.stringify(jsonToPost));
+						}, [{name:"Content-type", value:"application/json"}], JSON.stringify(jsonToPost), true);
 					}
 					
 				}
@@ -427,44 +471,82 @@
 				}
 			}
 			
-			// Démarrage de la page
-			window.onload = function() {
-				/*
-				* Permet de mettre à jour le nombre de tweets
-				* Fonction récursive qui s'éxécute tous X millosecondes (X étant la valeur de la variable timerRequest)
-				*/
-				var updateTweets = function () {
-					_ajax("GET", "/tweets/count", function(xhr) {
-						if (xhr.readyState === 4 && xhr.status === 200) {
-							var jsonResponse = JSON.parse(xhr.response);
-							if (jsonResponse && jsonResponse.count) {
-								document.getElementById("count").value = jsonResponse.count;
-							}
-						}
-					});
-					setTimeout(function(){ updateTweets() }, timerRequest);
-				}
+			/*
+			* Permet de charger les paliers et de lancer l'affichage du compteur de tweets
+			*/
+			function start() {
+				user = document.getElementById("user").value;
+				pwd = document.getElementById("pwd").value;
 				
-				updateTweets();
-				showRanks();
-				document.getElementById("timer").innerHTML = parseInt(timerRequest) / 1000;
+				// Vérification authentification
+				_ajax("GET", "/auth", function(xhr) {
+					if (xhr.readyState === 4 && xhr.status === 200) {
+						/*
+						* Permet de mettre à jour le nombre de tweets
+						* Fonction récursive qui s'éxécute tous X millosecondes (X étant la valeur de la variable timerRequest)
+						*/
+						var updateTweets = function () {
+							_ajax("GET", "/tweets/count", function(xhr) {
+								if (xhr.readyState === 4 && xhr.status === 200) {
+									document.getElementById("tweetsCount").style.display = "block";
+									var jsonResponse = JSON.parse(xhr.response);
+									if (jsonResponse && jsonResponse.count) {
+										document.getElementById("count").value = jsonResponse.count;
+									}
+									setTimeout(function(){ updateTweets() }, timerRequest);
+								}
+							});
+						}
+						
+						updateTweets();
+						showRanks();
+						document.getElementById("timer").innerHTML = parseInt(timerRequest) / 1000;
+						
+						var oFormAuthent = document.getElementById("auth");
+						oFormAuthent.parentNode.removeChild(oFormAuthent);
+					}
+				}, null, null, true);
+			}
+			
+			/*
+			* Appel start quand l'utilsateur tape entrée dans le formulaire d'authentification
+			*/
+			function callStart(event) {
+				if (event.keyCode === 13) {
+					start();
+				}
 			}
 			
 		</script>
     </head>
 
     <body>
-		<div>
-			<p>Nombre de tweets sur @devfest_lea : <input type="text" size="5" readonly id="count" value="0"/> (mis à jour toutes les <span id="timer"></span> secondes)</p>
+		<h3>Léa - Administration des paliers</h3>
+		<div id="tweetsCount">
+			<p>Nombre de tweets sur @devfest_lea : <input type="text" size="5" readonly id="count" value="-"/> (mis à jour toutes les <span id="timer">-</span> secondes)</p>
 		</div>
-				
-		<div id="ranks">
-			<div id="rank_columns" class="column">
-				<div id="rank_column" class="column">
-				</div>
+		
+		<div class="row">
+			<div id="auth">
+				<h4>Authentification</h4>
+				<p>
+					Utilisateur : <input type="text" id="user" value="" onkeydown="javascript:callStart(event);" />
+				</p>
+				<p>
+					Mot de passe : <input type="password" id="pwd" value="" onkeydown="javascript:callStart(event);"/>
+				</p>
+				<p>
+					<input type="button" id="validateAuthent" value="Valider" onclick="javascript:start();"/>
+				</p>
 			</div>
-			<div id="motion_column" class="column"></div>
-			<div id="sound_column" class="column"></div>
+			<div id="ranks">
+				<div id="rank_columns" class="column">
+					<div id="rank_column" class="column">
+					</div>
+				</div>
+				<div id="motion_column" class="column"></div>
+				<div id="sound_column" class="column"></div>
+			</div>
 		</div>
 		
 		<div id="actions">
